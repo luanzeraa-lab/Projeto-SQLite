@@ -1,139 +1,86 @@
 import * as SQLite from 'expo-sqlite';
 
-//----------------------------------------------------------------------------
-// Função para abrir ou criar  o banco de dados
-async function Banco(): Promise<SQLite.SQLiteDatabase> {
-    try {
-        const db = await SQLite.openDatabaseAsync('DDM2.db');
-        console.log('Banco de dados aberto');
-        return db;
-    } catch (error) {
-        console.error('Erro ao abrir o banco de dados', error);
-        throw error;
-    }
-}
-
-
-//----------------------------------------------------------------------------
-async function createTable(db: SQLite.SQLiteDatabase) {
-
-    try {
-        await db.execAsync(`
-            PRAGMA journal_mode = WAL;
-                CREATE TABLE IF NOT EXISTS USUARIO (
-                    ID_US  INTEGER PRIMARY KEY AUTOINCREMENT,
-                    NOME_US VARCHAR(100),
-                    EMAIL_US VARCHAR(100)
-                );
-`
-        ) ;
-        console.log('Tabela USUARIO criada');
-    } catch (error) {
-        console.error('Erro ao criar tabela', error);
-        throw error;
-    }
-
-}
-//----------------------------------------------------------------------------
-
-//Inserir novo usuario
-
-async function insertUsuario(db: SQLite.SQLiteDatabase,
-    nome: string, email: string) {
-    try {
-        await db.runAsync(
-            " INSERT INTO USUARIO (NOME_US, EMAIL_US) VALUES ( ? , ? )",
-             nome, email);
-        console.log('Usuario inserido');
-
-    } catch (error) {
-        console.error('Erro ao inserir usuario', error);
-        throw error;
-    }
-}
-
-//----------------------------------------------------------------------------
-
-// Exibir todos os usuarios
-
-
-async function selectUsuarios(db: SQLite.SQLiteDatabase) {
-    try {
-        const result = await db.getAllAsync('SELECT * FROM USUARIO ORDER BY ID_US DESC');
-        console.log('Usuarios encontrados');
-        return result;
-    } catch (erro) {
-        console.error('Erro ao buscar usuarios', erro);
-        throw erro;
-    }}
-
-//----------------------------------------------------------------------------
-
-// Exibir usuario pelo ID
-async function selectUsuarioById(db: SQLite.SQLiteDatabase, id: number){
-    try {
-        const result = await db.getFirstAsync('SELECT * FROM USUARIO WHERE ID_US = ?', id);
-        console.log('Usuario encontrado');
-        return result;
-    } catch (erro) {
-        console.error('Erro ao buscar usuario', erro);
-        throw erro;
-    }
-}
-
-//----------------------------------------------------------------------------
-
-//usuario pelo nome
-async function selectUsuarioNome(db: SQLite.SQLiteDatabase, nome: string) {
-    try {
-        const result = await db.getAllAsync('SELECT * FROM USUARIO WHERE NOME_US = ?', nome);
-        console.log('Usuario encontrado');
-        return result;
-    } catch (erro) {
-        console.error('Erro ao buscar usuario', erro);
-        throw erro;
-    }
-}
-
-
-//----------------------------------------------------------------------------
-
-// Excluir usuario pelo ID
-async function deleteUsuario(db: SQLite.SQLiteDatabase, id: number) {
-    try {
-        await db.runAsync(' DELETE FROM USUARIO WHERE ID_US = ? ', id);
-        console.log('Usuario excluido');
-    } catch (error) {
-        console.error('Erro ao excluir usuario', error);
-        throw error;
-    }
-}
-//----------------------------------------------------------------------------
-
-//ALTERAR USUARIO
-async function updateUsuario(db: SQLite.SQLiteDatabase, id: number, nome: string, email: string) {
-    try {
-        await db.runAsync(
-            'UPDATE USUARIO SET NOME_US = ?, EMAIL_US = ? WHERE ID_US = ?',
-            nome,
-            email,
-            id
-        );
-        console.log('Usuario atualizado');
-    } catch (error) {
-        console.error('Erro ao atualizar usuario', error);
-        throw error;
-    }
-}
-
-// drop tabela
-
-async function dropTable(db:SQLite.SQLiteDatabase) {
-        await db.execAsync('DROP TABLE IF EXISTS USUARIO');
-        console .log('Tabela USUARIO excluida');
-}
-
-export {
-    Banco, createTable, insertUsuario, selectUsuarios, selectUsuarioById, selectUsuarioNome
-    , deleteUsuario, updateUsuario, dropTable
+export type Pocao = {
+    id: number;
+    nome: string;
+    tipo: string;
+    efeito: string;
+    raridade: string;
 };
+
+export type PocaoInput = Omit<Pocao, 'id'>;
+
+const INITIAL_POTIONS: PocaoInput[] = [
+    { nome: 'Elixir de Cura', tipo: 'Cura', efeito: 'Recupera 50 pontos de vida', raridade: 'Comum' },
+    { nome: 'Poção de Mana', tipo: 'Mana', efeito: 'Restaura 40 pontos de mana', raridade: 'Comum' },
+    { nome: 'Essência de Fogo', tipo: 'Ataque', efeito: 'Aumenta o dano de fogo', raridade: 'Raro' },
+    { nome: 'Lágrima de Gelo', tipo: 'Defesa', efeito: 'Resiste a ataques congelantes', raridade: 'Raro' },
+    { nome: 'Tônico da Força', tipo: 'Atributo', efeito: 'Aumenta a força por 30 minutos', raridade: 'Comum' },
+    { nome: 'Elixir da Velocidade', tipo: 'Atributo', efeito: 'Aumenta a velocidade de movimento', raridade: 'Raro' },
+    { nome: 'Poção de Invisibilidade', tipo: 'Utilidade', efeito: 'Torna o usuário invisível', raridade: 'Muito Raro' },
+    { nome: 'Antídoto Universal', tipo: 'Cura', efeito: 'Remove venenos e maldições leves', raridade: 'Raro' },
+    { nome: 'Néctar do Dragão', tipo: 'Ataque', efeito: 'Concede sopro de fogo', raridade: 'Muito Raro' },
+    { nome: 'Poção de Proteção', tipo: 'Defesa', efeito: 'Cria uma barreira mágica', raridade: 'Comum' },
+];
+
+export async function Banco(): Promise<SQLite.SQLiteDatabase> {
+    return SQLite.openDatabaseAsync('pocoes.db');
+}
+
+export async function createTable(db: SQLite.SQLiteDatabase) {
+    await db.execAsync(`
+        PRAGMA journal_mode = WAL;
+        CREATE TABLE IF NOT EXISTS pocoes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL UNIQUE,
+            tipo TEXT NOT NULL,
+            efeito TEXT NOT NULL,
+            raridade TEXT NOT NULL
+        );
+    `);
+
+    const result = await db.getFirstAsync<{ total: number }>('SELECT COUNT(*) AS total FROM pocoes');
+    if (!result?.total) {
+        for (const pocao of INITIAL_POTIONS) {
+            await insertPocao(db, pocao);
+        }
+    }
+}
+
+export async function insertPocao(db: SQLite.SQLiteDatabase, pocao: PocaoInput) {
+    await db.runAsync(
+        'INSERT INTO pocoes (nome, tipo, efeito, raridade) VALUES (?, ?, ?, ?)',
+        pocao.nome.trim(),
+        pocao.tipo.trim(),
+        pocao.efeito.trim(),
+        pocao.raridade,
+    );
+}
+
+export async function selectPocoes(db: SQLite.SQLiteDatabase, limit: number, offset: number) {
+    return db.getAllAsync<Pocao>(
+        'SELECT id, nome, tipo, efeito, raridade FROM pocoes ORDER BY id DESC LIMIT ? OFFSET ?',
+        limit,
+        offset,
+    );
+}
+
+export async function countPocoes(db: SQLite.SQLiteDatabase) {
+    const result = await db.getFirstAsync<{ total: number }>('SELECT COUNT(*) AS total FROM pocoes');
+    return result?.total ?? 0;
+}
+
+export async function updatePocao(db: SQLite.SQLiteDatabase, id: number, pocao: PocaoInput) {
+    await db.runAsync(
+        'UPDATE pocoes SET nome = ?, tipo = ?, efeito = ?, raridade = ? WHERE id = ?',
+        pocao.nome.trim(),
+        pocao.tipo.trim(),
+        pocao.efeito.trim(),
+        pocao.raridade,
+        id,
+    );
+}
+
+export async function deletePocao(db: SQLite.SQLiteDatabase, id: number) {
+    await db.runAsync('DELETE FROM pocoes WHERE id = ?', id);
+}
